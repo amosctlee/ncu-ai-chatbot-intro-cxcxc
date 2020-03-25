@@ -1,0 +1,8 @@
+line-bot-sdk
+flask
+psycopg2
+peewee
+Pillow
+azure-cognitiveservices-vision-face
+msrest
+requests

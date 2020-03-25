@@ -1,0 +1,25 @@
+[
+{
+  "type": "template",
+  "altText": "this is a buttons template",
+  "template": {
+    "type": "buttons",
+    "actions": [
+      {
+        "type": "postback",
+        "label": "有聽過",
+        "text": "有聽過",
+        "data": "answer=yes&question=q1"
+      },
+      {
+        "type": "postback",
+        "label": "沒聽過",
+        "text": "沒聽過",
+        "data": "answer=no&question=q1"
+      }
+    ],
+    "title": "供應鏈數位轉型",
+    "text": "有沒有聽過這個議題呢？"
+  }
+}
+]

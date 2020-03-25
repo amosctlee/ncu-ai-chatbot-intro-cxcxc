@@ -1,0 +1,46 @@
+[
+{
+  "type": "template",
+  "altText": "this is a carousel template",
+  "template": {
+    "type": "carousel",
+    "actions": [],
+    "columns": [
+      {
+        "title": "台灣天氣查詢",
+        "text": "北部",
+        "actions": [
+          {
+            "type": "postback",
+            "label": "臺北市",
+            "text": "我要查詢臺北市的天氣",
+            "data": "weatherLocation=臺北市"
+          },
+          {
+            "type": "postback",
+            "label": "桃園市",
+            "text": "我要查詢桃園市的天氣",
+            "data": "weatherLocation=桃園市"
+          }
+        ]
+      },
+      {
+        "title": "台灣天氣查詢",
+        "text": "未定義",
+        "actions": [
+          {
+            "type": "message",
+            "label": "Action 1",
+            "text": "Action 1"
+          },
+          {
+            "type": "message",
+            "label": "Action 2",
+            "text": "Action 2"
+          }
+        ]
+      }
+    ]
+  }
+}
+]

@@ -1,0 +1,35 @@
+[
+    {
+      "type": "text",
+      "text": "這是傳統的供應鏈數位轉型機制，商業模式穩定，龍頭廠商明確。"
+    },
+    {
+      "type": "template",
+      "altText": "this is a buttons template",
+      "template": {
+        "type": "buttons",
+        "actions": [
+          {
+            "type": "postback",
+            "label": "供應鏈溯源",
+            "text": "供應鏈溯源",
+            "data": "answer=Supply chain traceability&question=q3"
+          },
+          {
+            "type": "postback",
+            "label": "產能媒合",
+            "text": "產能媒合",
+            "data": "answer=Capacity matching&question=q3"
+          },
+          {
+            "type": "postback",
+            "label": "新型資料應用",
+            "text": "新型資料應用",
+            "data": "answer=New data applications&question=q3"
+          }
+        ],
+        "title": "資料共享",
+        "text": "透過區塊鏈做高度資料共享之後，可以進一步做分析"
+      }
+    }
+]

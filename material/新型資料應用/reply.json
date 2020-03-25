@@ -1,0 +1,29 @@
+[
+    {
+      "type": "text",
+      "text": "企業的交易紀錄是不斷生成的，另外在產能媒合的加速下，有可能創造出新的產品。在資料充足的情況下，有機會從這些新生成的資料中找出一系列具有創意的商業資訊應用。"
+    },
+    {
+      "type": "template",
+      "altText": "this is a buttons template",
+      "template": {
+        "type": "buttons",
+        "actions": [
+          {
+            "type": "postback",
+            "label": "是的",
+            "text": "我願意",
+            "data": "answer=ok&question=q4"
+          },
+          {
+            "type": "postback",
+            "label": "還好",
+            "text": "我再想想",
+            "data": "answer=soso&question=q4"
+          }
+        ],
+        "title": "資訊產業的發展",
+        "text": "我想要找老師跟專家吃飯，繼續知道外面資訊產業的發展"
+      }
+    }
+]

@@ -1,0 +1,29 @@
+[
+    {
+      "type": "text",
+      "text": "用戶可以知道自己手上的貨物，整體組件是經由哪些廠商生產出來。"
+    },
+    {
+      "type": "template",
+      "altText": "this is a buttons template",
+      "template": {
+        "type": "buttons",
+        "actions": [
+          {
+            "type": "postback",
+            "label": "是的",
+            "text": "我願意",
+            "data": "answer=ok&question=q4"
+          },
+          {
+            "type": "postback",
+            "label": "還好",
+            "text": "我再想想",
+            "data": "answer=soso&question=q4"
+          }
+        ],
+        "title": "資訊產業的發展",
+        "text": "我想要找老師跟專家吃飯，繼續知道外面資訊產業的發展"
+      }
+    }
+]

@@ -1,0 +1,25 @@
+[
+{
+  "type": "template",
+  "altText": "this is a buttons template",
+  "template": {
+    "type": "buttons",
+    "actions": [
+      {
+        "type": "postback",
+        "label": "經典ERP",
+        "text": "經典ERP",
+        "data": "answer=Classic ERP&question=q2"
+      },
+      {
+        "type": "postback",
+        "label": "區塊鏈ERP系統",
+        "text": "區塊鏈ERP系統",
+        "data": "answer=Blockchain ERP system&question=q2"
+      }
+    ],
+    "title": "供應鏈數位轉型",
+    "text": "完成供應鏈數位轉型，企業之間做資料分享的高效率工具"
+  }
+}
+]
