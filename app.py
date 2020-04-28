@@ -101,85 +101,6 @@ def callback():
 # In[ ]:
 
 
-"""
-定義並創建資料庫中的表格，以便後續將資料存入資料庫
-    LineUserProfileTable
-    FollowEventTable
-    TextMessageTable
-    PostbackEventTable
-    QuestionsAnswer
-
-"""
-
-import peewee
-import datetime
-
-# 建立資料庫連線
-db = peewee.PostgresqlDatabase(secretFileContentJson.get("pg_db"), 
-                        user=secretFileContentJson.get("pg_user"), 
-                        password=secretFileContentJson.get("pg_password"),
-                        host=secretFileContentJson.get("pg_host"), 
-                        port=secretFileContentJson.get("pg_port"))
-
-
-class BaseModel(peewee.Model):
-    class Meta:
-        database = db
-        
-# 定義資料表
-class LineUserProfileTable(BaseModel):
-    # 定義欄位
-    userId = peewee.CharField()
-    displayName = peewee.CharField()
-    pictureUrl = peewee.CharField()
-    statusMessage = peewee.CharField(default="null")
-
-        
-# 定義資料表
-class FollowEventTable(BaseModel):
-    # 定義欄位
-    replyToken = peewee.CharField()
-    timestamp = peewee.TimestampField()
-    userId = peewee.CharField()
-        
-# 定義資料表
-class TextMessageTable(BaseModel):
-    # 定義欄位
-    replyToken = peewee.CharField()
-    timestamp = peewee.TimestampField()
-    userId = peewee.CharField()
-    
-    messageId = peewee.CharField()
-    messageType = peewee.CharField()
-    messageText = peewee.CharField()
-        
-# 定義資料表
-class PostbackEventTable(BaseModel):
-    # 定義欄位
-    replyToken = peewee.CharField()
-    timestamp = peewee.TimestampField()
-    userId = peewee.CharField()
-    
-    postbackData = peewee.CharField()
-    
-# 定義資料表
-class QuestionsAnswer(BaseModel):
-    userId = peewee.CharField()
-    question_1 = peewee.CharField()
-    question_2 = peewee.CharField()
-    question_3 = peewee.CharField()
-    question_4 = peewee.CharField()
-    
-# db.drop_tables([LineUserProfileTable, FollowEventTable, TextMessageTable, PostbackEventTable, QuestionsAnswer])
-db.create_tables([LineUserProfileTable, FollowEventTable, TextMessageTable, PostbackEventTable, QuestionsAnswer])
-
-if db:
-    db.close()
-
-
-# In[ ]:
-
-
 '''
 
 消息判斷器
@@ -246,6 +167,29 @@ def detect_json_array_to_new_message_array(fileName):
 # In[ ]:
 
 
+"""
+認證
+使用剛剛建立並下載的JSON檔案
+
+"""
+
+import gspread
+from google.oauth2.service_account import Credentials
+
+scopes = ['https://spreadsheets.google.com/feeds',
+         'https://www.googleapis.com/auth/drive']
+
+# 填寫金鑰檔案位置、名稱
+credentials = Credentials.from_service_account_file('ncu-ai-tutorial-47520ee70490.json', 
+                                                    scopes=scopes)
+
+gc = gspread.authorize(credentials)
+spread_sheet = gc.open('Linebot_records')
+
+
+# In[ ]:
+
+
 
 '''
 
@@ -282,6 +226,37 @@ def process_follow_event(event):
     # 從follow資料夾內，取出圖文選單id，並告知line，綁定用戶
     linkRichMenuId = open("material/follow/rich_menu_id", 'r').read()
     line_bot_api.link_rich_menu_to_user(event.source.user_id, linkRichMenuId)
+    
+    
+    # 準備將FollowEvent 內容存入FollowEventTable
+    follow_wks = spread_sheet.worksheet('FollowEventTable')
+    values_to_follow_wks = [event.reply_token,
+                            event.timestamp,
+                            event.source.user_id]
+    print(follow_wks.append_row(values_to_follow_wks))
+    
+    
+    # 用user_id 透過line_bot_api 向LINE官方索取用戶個資
+    user_profile = line_bot_api.get_profile(event.source.user_id)
+    
+    # 準備將用戶資料存入(或更新) LineUserProfileTable
+    users_wks = spread_sheet.worksheet('LineUserProfileTable')
+    values_to_users_wks = [user_profile.user_id,
+                          user_profile.display_name if user_profile.display_name else "",
+                          user_profile.picture_url if user_profile.picture_url else "",
+                          user_profile.status_message if user_profile.status_message else ""]
+
+    # 如果LineUserProfileTable 中沒有此用戶則新增
+    if not users_wks.findall(event.source.user_id):
+        print(users_wks.append_row(values_to_users_wks))
+        
+    # 如果LineUserProfileTable 中已存在此用戶則更新
+    else:
+        # 取得儲存格的 A1 notation
+        cell_adrs = users_wks.find(event.source.user_id).address
+        # 取開頭，ex: A1 -> A
+        cell_adrs = cell_adrs[0]
+        print(users_wks.update(f"{cell_adrs}1:{cell_adrs}4", [values_to_users_wks]))
 
 
 # In[ ]:
@@ -309,6 +284,16 @@ from linebot.models import (
 # 文字消息處理
 @handler.add(MessageEvent,message=TextMessage)
 def process_text_message(event):
+    
+    # 將用戶的文字消息存進TextMessageTable
+    text_wks = spread_sheet.worksheet('TextMessageTable')
+    values_to_text_wks = [event.reply_token,
+                         event.timestamp,
+                         event.source.user_id,
+                         event.message.id,
+                         event.message.type,
+                         event.message.text]
+    print(text_wks.append_row(values_to_text_wks))
 
     # 讀取本地檔案，並轉譯成消息
     result_message_array =[]
@@ -320,6 +305,9 @@ def process_text_message(event):
         event.reply_token,
         result_message_array
     )
+    
+
+    
 
 
 # In[ ]:
@@ -354,10 +342,47 @@ from urllib.parse import parse_qs
 
 @handler.add(PostbackEvent)
 def process_postback_event(event):
-    
     query_string_dict = parse_qs(event.postback.data)
-    
     print(query_string_dict)
+    
+    # 將用戶產生的PostbackEvent 存進PostbackEventTable
+    postback_wks = spread_sheet.worksheet('PostbackEventTable')
+    values_to_postback_wks = [event.reply_token,
+                             event.timestamp,
+                             event.source.user_id,
+                             event.postback.data]
+    print(postback_wks.append_row(values_to_postback_wks))
+    
+    # 準備將用戶回答問卷的答案存進QuestionsAnswer
+    qa_wks = spread_sheet.worksheet('QuestionsAnswer')
+    
+    # 如果還沒回答過問卷，新增一列資料
+    print(qa_wks.findall(event.source.user_id))
+    if not qa_wks.findall(event.source.user_id):
+        values_to_qa_wks = [event.source.user_id,
+                           query_string_dict.get('answer')[0] if query_string_dict.get('question')[0] == 'q1' else "",
+                           query_string_dict.get('answer')[0] if query_string_dict.get('question')[0] == 'q2' else "",
+                           query_string_dict.get('answer')[0] if query_string_dict.get('question')[0] == 'q3' else "",
+                           query_string_dict.get('answer')[0] if query_string_dict.get('question')[0] == 'q4' else ""]
+        print(qa_wks.append_row(values_to_qa_wks))
+    
+    # 已經回答過問卷，則根據回答的題目更新資料
+    else:
+        # 取得儲存格的 A1 notation
+        cell_adrs = qa_wks.find(event.source.user_id).address
+        # 取數字，ex: A1 -> 1
+        cell_adrs = cell_adrs[1]
+        # 從query_string_dict 取出題號，並根據題號存入答案
+        if query_string_dict.get('question')[0] == 'q1':
+            print(qa_wks.update(f"B{cell_adrs}", query_string_dict.get('answer')[0]))
+        elif query_string_dict.get('question')[0] == 'q2':
+            print(qa_wks.update(f"C{cell_adrs}", query_string_dict.get('answer')[0]))
+        elif query_string_dict.get('question')[0] == 'q3':
+            print(qa_wks.update(f"D{cell_adrs}", query_string_dict.get('answer')[0]))
+        elif query_string_dict.get('question')[0] == 'q4':
+            print(qa_wks.update(f"E{cell_adrs}", query_string_dict.get('answer')[0]))
+    
+    
     if 'folder' in query_string_dict:
     
         result_message_array =[]
@@ -381,6 +406,87 @@ def process_postback_event(event):
             event.reply_token,
             result_message_array
         )
+    
+    
+
+
+# In[ ]:
+
+
+# """
+# 定義並創建資料庫中的表格，以便後續將資料存入資料庫
+#     LineUserProfileTable
+#     FollowEventTable
+#     TextMessageTable
+#     PostbackEventTable
+#     QuestionsAnswer
+
+# """
+
+# import peewee
+# import datetime
+
+# # 建立資料庫連線
+# db = peewee.PostgresqlDatabase(secretFileContentJson.get("pg_db"), 
+#                         user=secretFileContentJson.get("pg_user"), 
+#                         password=secretFileContentJson.get("pg_password"),
+#                         host=secretFileContentJson.get("pg_host"), 
+#                         port=secretFileContentJson.get("pg_port"))
+
+
+# class BaseModel(peewee.Model):
+#     class Meta:
+#         database = db
+        
+# # 定義資料表
+# class LineUserProfileTable(BaseModel):
+#     # 定義欄位
+#     userId = peewee.CharField()
+#     displayName = peewee.CharField()
+#     pictureUrl = peewee.CharField()
+#     statusMessage = peewee.CharField(default="null")
+
+        
+# # 定義資料表
+# class FollowEventTable(BaseModel):
+#     # 定義欄位
+#     replyToken = peewee.CharField()
+#     timestamp = peewee.TimestampField()
+#     userId = peewee.CharField()
+        
+# # 定義資料表
+# class TextMessageTable(BaseModel):
+#     # 定義欄位
+#     replyToken = peewee.CharField()
+#     timestamp = peewee.TimestampField()
+#     userId = peewee.CharField()
+    
+#     messageId = peewee.CharField()
+#     messageType = peewee.CharField()
+#     messageText = peewee.CharField()
+        
+# # 定義資料表
+# class PostbackEventTable(BaseModel):
+#     # 定義欄位
+#     replyToken = peewee.CharField()
+#     timestamp = peewee.TimestampField()
+#     userId = peewee.CharField()
+    
+#     postbackData = peewee.CharField()
+    
+# # 定義資料表
+# class QuestionsAnswer(BaseModel):
+#     userId = peewee.CharField()
+#     question_1 = peewee.CharField()
+#     question_2 = peewee.CharField()
+#     question_3 = peewee.CharField()
+#     question_4 = peewee.CharField()
+    
+# # db.drop_tables([LineUserProfileTable, FollowEventTable, TextMessageTable, PostbackEventTable, QuestionsAnswer])
+# db.create_tables([LineUserProfileTable, FollowEventTable, TextMessageTable, PostbackEventTable, QuestionsAnswer])
+
+# if db:
+#     db.close()
 
 
 # In[ ]:
