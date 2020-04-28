@@ -6,6 +6,7 @@
 
 # !pip install flask
 # !pip install line-bot-sdk
+# !pip install gspread
 # !pip install peewee
 # !pip install --upgrade azure-cognitiveservices-vision-face
 
@@ -99,6 +100,16 @@ def callback():
 
 # In[ ]:
 
+
+"""
+定義並創建資料庫中的表格，以便後續將資料存入資料庫
+    LineUserProfileTable
+    FollowEventTable
+    TextMessageTable
+    PostbackEventTable
+    QuestionsAnswer
+
+"""
 
 import peewee
 import datetime
@@ -235,6 +246,7 @@ def detect_json_array_to_new_message_array(fileName):
 # In[ ]:
 
 
+
 '''
 
 handler處理關注消息
@@ -242,6 +254,8 @@ handler處理關注消息
 用戶關注時，讀取 素材 -> 關注 -> reply.json
 
 將其轉換成可寄發的消息，傳回給Line
+
+將用戶資料存在Google sheet
 
 '''
 
@@ -268,40 +282,10 @@ def process_follow_event(event):
     # 從follow資料夾內，取出圖文選單id，並告知line，綁定用戶
     linkRichMenuId = open("material/follow/rich_menu_id", 'r').read()
     line_bot_api.link_rich_menu_to_user(event.source.user_id, linkRichMenuId)
-    
-    # 將收集到的資料存進資料庫
-    user_profile = line_bot_api.get_profile(event.source.user_id)
-    
-
-    with db:
-        # 存入FolloweEvent
-        FollowEventTable.create(replyToken=event.reply_token, 
-                                timestamp=event.timestamp, 
-                                userId=event.source.user_id)
-        
-        # 存入個資
-        try:
-            # 判斷此用戶是否已經記錄過
-            record_of_users = LineUserProfileTable.select().where(LineUserProfileTable.userId == event.source.user_id).get()
-        except:
-            record_of_users = None
-        print(record_of_users)
-
-        if record_of_users is None:
-            # 用戶不存在時新增
-            LineUserProfileTable.create(userId=user_profile.user_id, 
-                                        displayName=user_profile.display_name if user_profile.display_name else "",
-                                        pictureUrl=user_profile.picture_url if user_profile.picture_url else "", 
-                                        statusMessage=user_profile.status_message if user_profile.status_message else "")
-        else:
-            # 用戶存在時更新
-            record_of_users.displayName = user_profile.display_name if user_profile.display_name else ""
-            record_of_users.pictureUrl =  user_profile.picture_url if user_profile.picture_url else ""
-            record_of_users.statusMessage =  user_profile.status_message if user_profile.status_message else ""
-            record_of_users.save()
 
 
 # In[ ]:
+
 
 
 '''
@@ -313,6 +297,8 @@ handler處理文字消息
 
 轉譯json後，將消息回傳給用戶
 
+將用戶文字消息存在Google sheet
+
 '''
 
 # 引用套件
@@ -323,64 +309,17 @@ from linebot.models import (
 # 文字消息處理
 @handler.add(MessageEvent,message=TextMessage)
 def process_text_message(event):
-    
-    try:
-        # 讀取本地檔案，並轉譯成消息
-        result_message_array =[]
-        replyJsonPath = "material/"+event.message.text+"/reply.json"
-        result_message_array = detect_json_array_to_new_message_array(replyJsonPath)
 
-        # 發送
-        line_bot_api.reply_message(
-            event.reply_token,
-            result_message_array
-        )
-    except FileNotFoundError as e:
-        # 用戶回傳文字不一定會觸發到我們預定的資料夾
-        print("file not found!")
-    
-    # 將收集到的資料存進資料庫
-    with db:
-        TextMessageTable.create(replyToken=event.reply_token, 
-                                timestamp=event.timestamp, 
-                                userId=event.source.user_id, 
-                                messageId=event.message.id, 
-                                messageType=event.message.type, 
-                                messageText=event.message.text)
+    # 讀取本地檔案，並轉譯成消息
+    result_message_array =[]
+    replyJsonPath = "material/"+event.message.text+"/reply.json"
+    result_message_array = detect_json_array_to_new_message_array(replyJsonPath)
 
-
-# In[ ]:
-
-
-'''
-    天氣數據回傳
-'''
-import requests
-import json
-def getLocationWeather(locationName):
-    
-    # 設定中央氣象局的網站位置
-    weatherDataUri='https://opendata.cwb.gov.tw/api/v1/rest/datastore/F-C0032-001?elementName=Wx&Authorization='+secretFileContentJson.get("weather_key")
-
-    # 將locationName內容結合進查詢位置
-    weatherDataUriWithQueryString=weatherDataUri+'&locationName='+locationName
-
-    # 要求 Python 訪問中央氣象局的網站位置
-    externelWebSiteWeatherData=requests.get(weatherDataUriWithQueryString)
-
-    # 將結果以json方式解讀
-    jsonWeatherData = json.loads(externelWebSiteWeatherData.text)
-
-    # 把結果取出
-    weatherDescribe=jsonWeatherData.get('records').get('location')[0].get('weatherElement')[0].get('time')
-
-    # 組合成array
-    returnArray = []
-    for weather in weatherDescribe:
-        demoString=weather.get('startTime')+'的時候是'+weather.get('parameter').get('parameterName')
-        returnArray.append(TextSendMessage(demoString))
-    
-    return returnArray
+    # 發送
+    line_bot_api.reply_message(
+        event.reply_token,
+        result_message_array
+    )
 
 
 # In[ ]:
@@ -403,6 +342,8 @@ menu, folder, tag
 若menu欄位有值，則
     讀取其rich_menu_id，並取得用戶id，將用戶與選單綁定
     讀取其reply.json，轉譯成消息，並發送
+    
+將用戶PostbackEvent 中的data存在Google sheet
 
 '''
 from linebot.models import (
@@ -414,39 +355,20 @@ from urllib.parse import parse_qs
 @handler.add(PostbackEvent)
 def process_postback_event(event):
     
-    # 解析data欄位的內容
     query_string_dict = parse_qs(event.postback.data)
     
     print(query_string_dict)
-    
-    # 若folder欄位存在
     if 'folder' in query_string_dict:
     
         result_message_array =[]
-        
-        # 偵測material資料夾內，與folder欄位的內容相同名的資料夾內的reply.json
+
         replyJsonPath = 'material/'+query_string_dict.get('folder')[0]+"/reply.json"
-        
-        # 轉換成Line需要的消息格式
         result_message_array = detect_json_array_to_new_message_array(replyJsonPath)
-
+  
         line_bot_api.reply_message(
             event.reply_token,
             result_message_array
         )
-    # 若folder欄位不存在，且weatherLocation欄位存在
-    elif 'weatherLocation' in query_string_dict:
-
-        # 把內容傳給前面的查詢天氣方法，並得到天氣消息
-        result_message_array=getLocationWeather(query_string_dict.get('weatherLocation')[0])
-        
-        # 把消息傳回給Line
-        line_bot_api.reply_message(
-            event.reply_token,
-            result_message_array
-        )
-        
-    # 若前面的欄位都不存在，且menu欄位存在
     elif 'menu' in query_string_dict:
  
         linkRichMenuId = open("material/"+query_string_dict.get('menu')[0]+'/rich_menu_id', 'r').read()
@@ -459,41 +381,231 @@ def process_postback_event(event):
             event.reply_token,
             result_message_array
         )
+
+
+# In[ ]:
+
+
+# '''
+
+# handler處理關注消息
+
+# 用戶關注時，讀取 素材 -> 關注 -> reply.json
+
+# 將其轉換成可寄發的消息，傳回給Line
+
+# 將用戶資料收進資料庫
+
+# '''
+
+# # 引用套件
+# from linebot.models import (
+#     FollowEvent
+# )
+
+# # 關注事件處理
+# @handler.add(FollowEvent)
+# def process_follow_event(event):
     
-    # 將收集到的資料存進資料庫
-    with db:
-        # 存入postbackevent
-        PostbackEventTable.create(replyToken=event.reply_token,
-                                  timestamp=event.timestamp, 
-                                  userId=event.source.user_id, 
-                                  postbackData=event.postback.data)
+#     # 讀取並轉換
+#     result_message_array =[]
+#     replyJsonPath = "material/follow/reply.json"
+#     result_message_array = detect_json_array_to_new_message_array(replyJsonPath)
+
+#     # 消息發送
+#     line_bot_api.reply_message(
+#         event.reply_token,
+#         result_message_array
+#     )
+
+#     # 從follow資料夾內，取出圖文選單id，並告知line，綁定用戶
+#     linkRichMenuId = open("material/follow/rich_menu_id", 'r').read()
+#     line_bot_api.link_rich_menu_to_user(event.source.user_id, linkRichMenuId)
+    
+#     # 將收集到的資料存進資料庫
+#     user_profile = line_bot_api.get_profile(event.source.user_id)
+    
+
+#     with db:
+#         # 存入FolloweEvent
+#         FollowEventTable.create(replyToken=event.reply_token, 
+#                                 timestamp=event.timestamp, 
+#                                 userId=event.source.user_id)
         
-        # 存入問卷答案
-        try:
-            # 判斷是否已經回答過
-            record_of_questions = QuestionsAnswer.select().where(QuestionsAnswer.userId == event.source.user_id).get()
-        except:
-            record_of_questions = None
-        print(record_of_questions)
+#         # 存入個資
+#         try:
+#             # 判斷此用戶是否已經記錄過
+#             record_of_users = LineUserProfileTable.select().where(LineUserProfileTable.userId == event.source.user_id).get()
+#         except:
+#             record_of_users = None
+#         print(record_of_users)
+
+#         if record_of_users is None:
+#             # 用戶不存在時新增
+#             LineUserProfileTable.create(userId=user_profile.user_id, 
+#                                         displayName=user_profile.display_name if user_profile.display_name else "",
+#                                         pictureUrl=user_profile.picture_url if user_profile.picture_url else "", 
+#                                         statusMessage=user_profile.status_message if user_profile.status_message else "")
+#         else:
+#             # 用戶存在時更新
+#             record_of_users.displayName = user_profile.display_name if user_profile.display_name else ""
+#             record_of_users.pictureUrl =  user_profile.picture_url if user_profile.picture_url else ""
+#             record_of_users.statusMessage =  user_profile.status_message if user_profile.status_message else ""
+#             record_of_users.save()
+
+
+# In[ ]:
+
+
+# '''
+
+# handler處理文字消息
+
+# 收到用戶回應的文字消息，
+# 按文字消息內容，往素材資料夾中，找尋以該內容命名的資料夾，讀取裡面的reply.json
+
+# 轉譯json後，將消息回傳給用戶
+
+# 將用戶發話記錄收集進資料庫
+
+# '''
+
+# # 引用套件
+# from linebot.models import (
+#     MessageEvent, TextMessage
+# )
+
+# # 文字消息處理
+# @handler.add(MessageEvent,message=TextMessage)
+# def process_text_message(event):
+    
+#     try:
+#         # 讀取本地檔案，並轉譯成消息
+#         result_message_array =[]
+#         replyJsonPath = "material/"+event.message.text+"/reply.json"
+#         result_message_array = detect_json_array_to_new_message_array(replyJsonPath)
+
+#         # 發送
+#         line_bot_api.reply_message(
+#             event.reply_token,
+#             result_message_array
+#         )
+#     except FileNotFoundError as e:
+#         # 用戶回傳文字不一定會觸發到我們預定的資料夾
+#         print("file not found!")
+    
+#     # 將收集到的資料存進資料庫
+#     with db:
+#         TextMessageTable.create(replyToken=event.reply_token, 
+#                                 timestamp=event.timestamp, 
+#                                 userId=event.source.user_id, 
+#                                 messageId=event.message.id, 
+#                                 messageType=event.message.type, 
+#                                 messageText=event.message.text)
+
+
+# In[ ]:
+
+
+# '''
+
+# handler處理Postback Event
+
+# 載入功能選單與啟動特殊功能
+
+# 解析postback的data，並按照data欄位判斷處理
+
+# 現有三個欄位
+# menu, folder, tag
+
+# 若folder欄位有值，則
+#     讀取其reply.json，轉譯成消息，並發送
+
+# 若menu欄位有值，則
+#     讀取其rich_menu_id，並取得用戶id，將用戶與選單綁定
+#     讀取其reply.json，轉譯成消息，並發送
+
+
+
+# '''
+# from linebot.models import (
+#     PostbackEvent
+# )
+
+# from urllib.parse import parse_qs 
+
+# @handler.add(PostbackEvent)
+# def process_postback_event(event):
+    
+#     # 解析data欄位的內容
+#     query_string_dict = parse_qs(event.postback.data)
+    
+#     print(query_string_dict)
+    
+#     # 若folder欄位存在
+#     if 'folder' in query_string_dict:
+    
+#         result_message_array =[]
         
-        if record_of_questions is None:
-            # 還沒回答過
-            QuestionsAnswer.create(userId=event.source.user_id,
-                                  question_1=query_string_dict.get('answer')[0] if query_string_dict.get('question')[0] == 'q1' else "", 
-                                  question_2=query_string_dict.get('answer')[0] if query_string_dict.get('question')[0] == 'q2' else "", 
-                                  question_3=query_string_dict.get('answer')[0] if query_string_dict.get('question')[0] == 'q3' else "",
-                                  question_4=query_string_dict.get('answer')[0] if query_string_dict.get('question')[0] == 'q4' else "")
-        else:
-            # 已經回答過
-            if query_string_dict.get('question')[0] == 'q1':
-                record_of_questions.question_1 = query_string_dict.get('answer')[0]
-            elif query_string_dict.get('question')[0] == 'q2':
-                record_of_questions.question_2 = query_string_dict.get('answer')[0]
-            elif query_string_dict.get('question')[0] == 'q3':
-                record_of_questions.question_3 = query_string_dict.get('answer')[0]
-            elif query_string_dict.get('question')[0] == 'q4':
-                record_of_questions.question_4 = query_string_dict.get('answer')[0]
-            record_of_questions.save()
+#         # 偵測material資料夾內，與folder欄位的內容相同名的資料夾內的reply.json
+#         replyJsonPath = 'material/'+query_string_dict.get('folder')[0]+"/reply.json"
+        
+#         # 轉換成Line需要的消息格式
+#         result_message_array = detect_json_array_to_new_message_array(replyJsonPath)
+
+#         line_bot_api.reply_message(
+#             event.reply_token,
+#             result_message_array
+#         )
+        
+#     # 若前面的欄位都不存在，且menu欄位存在
+#     elif 'menu' in query_string_dict:
+ 
+#         linkRichMenuId = open("material/"+query_string_dict.get('menu')[0]+'/rich_menu_id', 'r').read()
+#         line_bot_api.link_rich_menu_to_user(event.source.user_id,linkRichMenuId)
+        
+#         replyJsonPath = 'material/'+query_string_dict.get('menu')[0]+"/reply.json"
+#         result_message_array = detect_json_array_to_new_message_array(replyJsonPath)
+  
+#         line_bot_api.reply_message(
+#             event.reply_token,
+#             result_message_array
+#         )
+    
+#     # 將收集到的資料存進資料庫
+#     with db:
+#         # 存入postbackevent
+#         PostbackEventTable.create(replyToken=event.reply_token,
+#                                   timestamp=event.timestamp, 
+#                                   userId=event.source.user_id, 
+#                                   postbackData=event.postback.data)
+        
+#         # 存入問卷答案
+#         try:
+#             # 判斷是否已經回答過
+#             record_of_questions = QuestionsAnswer.select().where(QuestionsAnswer.userId == event.source.user_id).get()
+#         except:
+#             record_of_questions = None
+#         print(record_of_questions)
+        
+#         if record_of_questions is None:
+#             # 還沒回答過
+#             QuestionsAnswer.create(userId=event.source.user_id,
+#                                   question_1=query_string_dict.get('answer')[0] if query_string_dict.get('question')[0] == 'q1' else "", 
+#                                   question_2=query_string_dict.get('answer')[0] if query_string_dict.get('question')[0] == 'q2' else "", 
+#                                   question_3=query_string_dict.get('answer')[0] if query_string_dict.get('question')[0] == 'q3' else "",
+#                                   question_4=query_string_dict.get('answer')[0] if query_string_dict.get('question')[0] == 'q4' else "")
+#         else:
+#             # 已經回答過
+#             if query_string_dict.get('question')[0] == 'q1':
+#                 record_of_questions.question_1 = query_string_dict.get('answer')[0]
+#             elif query_string_dict.get('question')[0] == 'q2':
+#                 record_of_questions.question_2 = query_string_dict.get('answer')[0]
+#             elif query_string_dict.get('question')[0] == 'q3':
+#                 record_of_questions.question_3 = query_string_dict.get('answer')[0]
+#             elif query_string_dict.get('question')[0] == 'q4':
+#                 record_of_questions.question_4 = query_string_dict.get('answer')[0]
+#             record_of_questions.save()
 
 
 # In[ ]:
@@ -506,6 +618,8 @@ handler處理圖片消息
 用戶傳照片消息給Line
 
 我方使用 消息的id 向Line 索取照片
+
+辨識照片中的臉，並回傳辨識後的照片
 
 '''
 

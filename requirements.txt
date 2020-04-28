@@ -1,5 +1,6 @@
 line-bot-sdk
 flask
+gspread
 psycopg2
 peewee
 Pillow
