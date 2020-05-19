@@ -254,9 +254,9 @@ def process_follow_event(event):
     else:
         # 取得儲存格的 A1 notation
         cell_adrs = users_wks.find(event.source.user_id).address
-        # 取開頭，ex: A1 -> A
-        cell_adrs = cell_adrs[0]
-        print(users_wks.update(f"{cell_adrs}1:{cell_adrs}4", [values_to_users_wks]))
+        # 取數字，ex: A1 -> 1
+        cell_adrs = cell_adrs[1:]
+        print(users_wks.update(f"A{cell_adrs}:D{cell_adrs}", [values_to_users_wks]))
 
 
 # In[ ]:
@@ -371,7 +371,7 @@ def process_postback_event(event):
         # 取得儲存格的 A1 notation
         cell_adrs = qa_wks.find(event.source.user_id).address
         # 取數字，ex: A1 -> 1
-        cell_adrs = cell_adrs[1]
+        cell_adrs = cell_adrs[1:]
         # 從query_string_dict 取出題號，並根據題號存入答案
         if query_string_dict.get('question')[0] == 'q1':
             print(qa_wks.update(f"B{cell_adrs}", query_string_dict.get('answer')[0]))
